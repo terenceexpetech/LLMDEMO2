@@ -1,5 +1,99 @@
-# Vue 3 + TypeScript + Vite
+應用場景: 使用API獲取個股資訊給予投資建議
+純前端畫面以桌面為主，可RWD給手機使用，有AI對話框、周線為主的個股走勢圖(跟台指比較)、台股類群長跌幅長條圖、相關新聞標題跟新聞連結
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+技術選型使用WebLLM小模型 + API資訊做總結 + 前端框架vuejs ui框架shadcn
 
-Learn more about the recommended Project Setup and IDE Support in the [Vue Docs TypeScript Guide](https://vuejs.org/guide/typescript/overview.html#project-setup).
+
+
+-----
+
+# 專案規劃需求（Frontend + WebLLM 投資分析工具）
+
+## 目標
+建立一個「純前端」投資分析網站，透過外部金融 API + 小型 LLM（WebLLM）提供即時個股分析與投資建議。
+
+---
+
+## 🧩 核心功能
+
+### 1. 個股分析
+- 使用者輸入：
+  - 股票名稱 / 股票代號
+- 顯示內容：
+  - 公司基本資訊
+  - 周線走勢圖
+  - 與台指（大盤）比較走勢
+  - AI 投資建議（摘要）
+
+---
+
+### 2. 圖表區
+- 周線 K 線或折線圖
+- 個股 vs 台指比較
+- 台股「類股漲跌幅」長條圖（Top / Bottom）
+
+---
+
+### 3. AI 對話系統
+- Chat UI（類似 ChatGPT）
+- 能基於：
+  - 當前選中個股
+  - API資料
+  - 最新新聞
+- 提供：
+  - 投資建議
+  - 趨勢分析
+  - 問答互動
+
+---
+
+### 4. 新聞整合
+- 顯示：
+  - 新聞標題
+  - 來源
+  - 發布時間
+  - 外部連結
+- AI 可讀取新聞後進行摘要
+
+---
+
+## 技術選型
+
+### 前端
+- Framework: Vue 3
+- UI: shadcn (Vue 版本或自建風格)
+- Chart: ( TradingView)
+
+### AI
+- WebLLM（在瀏覽器執行）
+- 小模型（請建議適合 summarization / reasoning 的模型）
+
+### API 來源（免費）
+- FinMind
+- Twelve Data
+- Finnhub
+- FRED（宏觀資料）
+
+---
+
+##  AI 使用方式
+
+### Input 組合
+- 股票 API 資料
+- 技術指標（如 MA、RSI，如果可行）
+- 新聞列表
+- 使用者問題
+
+### Output
+- 投資建議（短 + 中）
+- 風險提示
+- 趨勢判斷（多 / 空 / 震盪）
+
+---
+
+## 限制條件
+
+- 不使用後端（Serverless 可討論，但盡量避免）
+- 不自行訓練模型
+- 儘量使用免費資源
+- 可部署於 GitHub Pages

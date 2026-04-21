@@ -4,21 +4,17 @@ import { CreateMLCEngine, type MLCEngine } from "@mlc-ai/web-llm";
 import { 
   NConfigProvider, 
   NGlobalStyle, 
-  NCard, 
-  NInput, 
-  NButton, 
-  NProgress, 
   NScrollbar, 
-  NBadge, 
-  NGrid, 
-  NGridItem, 
-  NSpace, 
-  NStatistic,
-  NText,
   zhTW,
   dateZhTW,
   NResult
 } from 'naive-ui';
+
+// 引入 shadcn-vue 組件
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 import { Line } from 'vue-chartjs'
 import {
@@ -51,13 +47,14 @@ let engineInstance: MLCEngine | null = null;
 const isLoaded = ref(false);
 const isInitializing = ref(false);
 const isWorking = ref(false);
-const statusText = ref("待命");
-const progress = ref(0);
+const statusText = ref("系統待命");
+const progressValue = ref(0);
 const webGPUAvailable = ref(true);
+const userInput = ref(""); // 使用者對話輸入
 
 if (typeof navigator !== "undefined" && !("gpu" in navigator)) {
   webGPUAvailable.value = false;
-  statusText.value = "不支援 WebGPU";
+  statusText.value = "不支援_WEBGPU";
 }
 
 // 數據狀態
@@ -67,20 +64,46 @@ const indexHistory = ref<any[]>([]);
 const newsList = ref<any[]>([]);
 const latestPrice = ref<any>(null);
 
-// 圖表數據
+// 圖表數據 (工業風配色：高對比黑白灰)
 const chartData = ref<any>({ labels: [], datasets: [] });
 const chartOptions = {
   responsive: true,
   maintainAspectRatio: false,
   interaction: { mode: 'index', intersect: false },
   scales: {
-    y: { display: true, position: 'left', grid: { color: 'rgba(0,0,0,0.03)' }, ticks: { font: { size: 9 } } },
-    y1: { display: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { font: { size: 9 } } },
-    x: { grid: { display: false }, ticks: { font: { size: 9 } } }
+    y: { 
+      display: true, 
+      position: 'left', 
+      grid: { color: '#f1f5f9' }, 
+      ticks: { color: '#0f172a', font: { size: 10, family: 'monospace', weight: 'bold' } } 
+    },
+    y1: { 
+      display: true, 
+      position: 'right', 
+      grid: { drawOnChartArea: false }, 
+      ticks: { color: '#64748b', font: { size: 10, family: 'monospace' } } 
+    },
+    x: { 
+      grid: { display: false }, 
+      ticks: { color: '#0f172a', font: { size: 10, family: 'monospace', weight: 'bold' } } 
+    }
   },
   plugins: {
-    legend: { position: 'top', align: 'end', labels: { boxWidth: 6, font: { size: 9 } } },
-    tooltip: { backgroundColor: 'rgba(255,255,255,0.9)', titleColor: '#000', bodyColor: '#666', borderColor: '#eee', borderWidth: 1 }
+    legend: { 
+      position: 'top', 
+      align: 'end', 
+      labels: { boxWidth: 10, color: '#0f172a', font: { size: 11, weight: 'bold' } } 
+    },
+    tooltip: { 
+      backgroundColor: '#ffffff', 
+      titleColor: '#0f172a', 
+      bodyColor: '#475569', 
+      borderColor: '#0f172a', 
+      borderWidth: 2,
+      padding: 12,
+      cornerRadius: 0,
+      displayColors: false,
+    }
   }
 };
 
@@ -97,8 +120,8 @@ async function initializeModel() {
   try {
     engineInstance = await CreateMLCEngine(selectedModel, {
       initProgressCallback: (report) => {
-        statusText.value = report.text;
-        progress.value = report.progress;
+        statusText.value = `正在部署核心_${Math.round(report.progress * 100)}%`;
+        progressValue.value = Math.round(report.progress * 100);
       }
     });
     isLoaded.value = true;
@@ -118,7 +141,7 @@ async function fetchDataAndSummarize() {
 
   try {
     messages.value = [systemMessage];
-    statusText.value = `同步中...`;
+    statusText.value = `正在同步數據...`;
     
     const pastDate = new Date();
     pastDate.setDate(pastDate.getDate() - 35);
@@ -143,21 +166,23 @@ async function fetchDataAndSummarize() {
         labels: plotPrice.map(d => d.date.slice(5)),
         datasets: [
           {
-            label: `個股 ${stockId.value}`,
+            label: `個股走勢 ${stockId.value}`,
             data: plotPrice.map(d => d.close),
-            borderColor: '#334155',
-            backgroundColor: 'rgba(51, 65, 85, 0.05)',
+            borderColor: '#0f172a',
+            borderWidth: 3,
+            backgroundColor: 'rgba(15, 23, 42, 0.05)',
             fill: true,
-            tension: 0.3,
+            tension: 0,
             yAxisID: 'y'
           },
           {
-            label: '台指',
+            label: '台指大盤',
             data: plotIndex.map(d => d.close),
             borderColor: '#94a3b8',
-            borderDash: [4, 4],
+            borderWidth: 1.5,
+            borderDash: [0, 0],
             fill: false,
-            tension: 0.3,
+            tension: 0,
             yAxisID: 'y1'
           }
         ]
@@ -167,34 +192,38 @@ async function fetchDataAndSummarize() {
     }
 
     try {
-      const q = encodeURIComponent(`${stockId.value} 台灣 股票`);
-      const newsRes = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=https%3A%2F%2Fnews.google.com%2Frss%2Fsearch%3Fq%3D${q}%26hl%3Dzh-TW%26gl%3DTW%26ceid%3DTW%253Azh-Hant&api_key=oyw4f9v3j5o6p8q7a9v0q5u2b1r7z6m5n4l3k2j1`);
+      const newsRes = await fetch(`https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockNews&data_id=${stockId.value}&start_date=${startDate}`);
       const newsJson = await newsRes.json();
-      if (newsJson.status === 'ok') {
-        newsList.value = newsJson.items.slice(0, 6).map((item: any) => ({
-          date: item.pubDate.split(' ')[0].slice(5),
-          title: item.title.split(' - ')[0]
+      if (newsJson.msg === 'success' && newsJson.data.length > 0) {
+        newsList.value = newsJson.data.slice(-8).reverse().map((item: any) => ({
+          date: item.date,
+          title: item.title,
+          link: item.link,
+          source: item.source
         }));
+      } else {
+        newsList.value = [];
       }
     } catch (e) {
-      console.warn(e);
+      console.warn("新聞數據載入失敗:", e);
+      newsList.value = [];
     }
 
     const detailedPrice = priceHistory.value.slice(0, 5).map((d: any) => 
-      `${d.date}: 收盤${d.close}, 漲跌${d.spread}`
+      `${d.date}: 收盤${d.close} (漲跌${d.spread})`
     ).join('\n');
     
-    const userPrompt = `標的: ${stockId.value}\n【近五日】\n${detailedPrice}\n【情報】\n${newsList.value.map(n => n.title).join('\n')}`;
+    const userPrompt = `標的代號: ${stockId.value}\n[股價數據]\n${detailedPrice}\n[市場情報]\n${newsList.value.map(n => n.title).join('\n')}`;
     messages.value.push({ role: "user" as const, content: userPrompt });
 
-    statusText.value = "AI 分析中";
+    statusText.value = "AI 推理分析中";
     const assistantMsgIndex = messages.value.length;
     messages.value.push({ role: "assistant" as const, content: "" });
 
     const chunks = await engineInstance.chat.completions.create({
       messages: messages.value.slice(0, assistantMsgIndex) as any,
       stream: true,
-      temperature: 0.2,
+      temperature: 0.1,
     });
 
     for await (const chunk of chunks) {
@@ -202,131 +231,271 @@ async function fetchDataAndSummarize() {
     }
     statusText.value = "系統就緒";
   } catch (error: any) {
-    statusText.value = "錯誤";
-    messages.value.push({ role: "assistant" as const, content: `[錯誤] ${error.message}` });
+    statusText.value = "發生錯誤";
+    messages.value.push({ role: "assistant" as const, content: `[系統錯誤] ${error.message}` });
+  } finally {
+    isWorking.value = false;
+  }
+}
+
+async function sendMessage() {
+  if (!userInput.value.trim() || isWorking.value || !engineInstance) return;
+  
+  const text = userInput.value;
+  userInput.value = "";
+  isWorking.value = true;
+  statusText.value = "AI 思考中...";
+
+  try {
+    messages.value.push({ role: "user", content: text });
+    
+    const assistantMsgIndex = messages.value.length;
+    messages.value.push({ role: "assistant", content: "" });
+
+    const chunks = await engineInstance.chat.completions.create({
+      messages: messages.value.slice(0, assistantMsgIndex) as any,
+      stream: true,
+      temperature: 0.3,
+    });
+
+    for await (const chunk of chunks) {
+      messages.value[assistantMsgIndex].content += chunk.choices[0]?.delta?.content || "";
+    }
+    statusText.value = "系統就緒";
+  } catch (error: any) {
+    statusText.value = "連線失敗";
+    messages.value.push({ role: "assistant", content: `[錯誤] ${error.message}` });
   } finally {
     isWorking.value = false;
   }
 }
 
 const themeOverrides = {
-  common: { primaryColor: '#334155', borderRadius: '12px' },
-  Card: { borderRadius: '16px', paddingMedium: '16px' }
+  common: { primaryColor: '#0f172a', borderRadius: '0px' },
+  Card: { borderRadius: '0px' }
 };
 </script>
 
 <template>
   <n-config-provider :locale="zhTW" :date-locale="dateZhTW" :theme-overrides="themeOverrides">
     <n-global-style />
-    <div class="main-container">
+    <div class="min-h-screen bg-[#fcfcfc] text-slate-900 font-sans selection:bg-slate-900 selection:text-white">
       
-      <!-- 初始化全屏遮罩 -->
-      <div v-if="!isLoaded" class="init-overlay">
-        <n-card class="init-card" :bordered="false">
-          <h2 class="init-title">戰情室系統</h2>
-          <div class="progress-section">
-            <div class="progress-info">
-              <span>核心載入</span>
-              <span class="percentage">{{ Math.round(progress * 100) }}%</span>
+      <!-- 初始化全螢幕遮罩 -->
+      <div v-if="!isLoaded" class="fixed inset-0 bg-white flex items-center justify-center z-[100] px-4">
+        <div class="max-w-md w-full border-4 border-slate-900 bg-white p-12 space-y-10">
+          <div class="space-y-3 border-b-4 border-slate-900 pb-8 text-center">
+            <h1 class="text-4xl font-black tracking-tighter uppercase italic">Analytic_Core</h1>
+            <p class="text-[10px] font-bold text-slate-500 tracking-[0.4em]">本地推理引擎 v1.5 / 繁體中文版</p>
+          </div>
+          
+          <div class="space-y-8">
+            <div class="space-y-3">
+              <div class="flex justify-between text-xs font-black uppercase">
+                <span>核心組件部署進度</span>
+                <span class="font-mono">{{ progressValue }}%</span>
+              </div>
+              <div class="h-6 border-2 border-slate-900 p-1">
+                <div class="h-full bg-slate-900 transition-all duration-300" :style="{ width: progressValue + '%' }"></div>
+              </div>
             </div>
-            <n-progress type="line" :percentage="Math.round(progress * 100)" :show-indicator="false" processing color="#334155" rail-color="#e2e8f0" :height="12" />
-          </div>
-          <n-button type="primary" block size="large" @click="initializeModel" :disabled="isInitializing || !webGPUAvailable" :loading="isInitializing" class="init-btn">啟動戰情系統</n-button>
-          <p v-if="isInitializing" class="download-hint">首次部署約 400MB，請保持網路連線</p>
-        </n-card>
-      </div>
-
-      <!-- 主戰情室介面 (RWD 優化) -->
-      <div v-else class="dashboard-layout">
-        
-        <!-- Top Bar (RWD) -->
-        <div class="top-nav">
-          <div class="nav-brand">
-            <h1 class="logo font-black">AI DASHBOARD <span class="version text-xs opacity-30">v1.5</span></h1>
-          </div>
-          <div class="nav-controls">
-            <n-input v-model:value="stockId" placeholder="代號" size="large" class="stock-input" @keyup.enter="fetchDataAndSummarize" />
-            <n-button type="primary" size="large" @click="fetchDataAndSummarize" :disabled="isWorking" :loading="isWorking" class="exec-btn">分析</n-button>
+            
+            <Button 
+              size="lg" 
+              class="w-full h-20 text-2xl font-black uppercase rounded-none border-4 border-slate-900 bg-slate-900 text-white hover:bg-white hover:text-slate-900 transition-all active:translate-y-1"
+              @click="initializeModel" 
+              :disabled="isInitializing || !webGPUAvailable"
+            >
+              <span v-if="!isInitializing">進入分析中心</span>
+              <span v-else class="animate-pulse">部署中...</span>
+            </Button>
           </div>
         </div>
+      </div>
 
-        <!-- Main Content (RWD Grid) -->
-        <div class="content-wrapper">
-          <div class="grid-main">
-            
-            <!-- Left Side -->
-            <div class="column-left">
-              <n-space vertical :size="16">
-                
-                <!-- 圖表 -->
-                <n-card title="走勢對比 (個股 vs 台指)" class="chart-card">
-                  <div class="chart-container">
-                    <Line v-if="chartData.labels.length > 0" :data="chartData" :options="chartOptions" />
-                    <n-result v-else status="404" title="等待輸入" size="small" />
+      <!-- 主儀表板佈局 -->
+      <div v-else class="max-w-[1800px] mx-auto p-4 md:p-6 space-y-6 animate-in fade-in duration-500">
+        
+        <!-- 頂部控制面板 -->
+        <header class="flex flex-col md:flex-row items-stretch border-4 border-slate-900 bg-white">
+          <div class="flex items-center gap-8 px-8 py-5 bg-slate-900 text-white">
+            <div class="text-4xl font-black italic tracking-tighter">QA</div>
+            <div class="h-10 w-1 bg-slate-700"></div>
+            <div>
+              <h1 class="text-2xl font-black uppercase tracking-tight">戰情終端 A01</h1>
+              <p class="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">系統狀態: {{ statusText }}</p>
+            </div>
+          </div>
+          
+          <div class="flex flex-grow items-stretch">
+            <input 
+              v-model="stockId" 
+              placeholder="請輸入股票代號 (例: 2330)" 
+              class="flex-grow px-8 py-5 bg-white border-l-4 border-slate-900 focus:outline-none font-bold text-2xl placeholder:text-slate-200 uppercase"
+              @keyup.enter="fetchDataAndSummarize"
+            />
+            <button 
+              @click="fetchDataAndSummarize" 
+              :disabled="isWorking"
+              class="px-12 bg-slate-900 text-white font-black text-xl uppercase hover:bg-slate-800 transition-all active:bg-slate-700 border-l-4 border-slate-900 disabled:bg-slate-200"
+            >
+              <span v-if="!isWorking">執行數據分析</span>
+              <span v-else class="animate-pulse">運算中...</span>
+            </button>
+          </div>
+        </header>
+
+        <!-- 三欄式網格佈局 -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          
+          <!-- 左側欄：即時市場情報 -->
+          <aside class="lg:col-span-3 border-4 border-slate-900 bg-white flex flex-col">
+            <div class="bg-slate-900 text-white py-3 px-6">
+              <span class="text-xs font-black uppercase tracking-widest">即時市場情報</span>
+            </div>
+            <ScrollArea class="flex-grow h-[800px]">
+              <div class="p-6 space-y-8">
+                <a 
+                  v-for="n in newsList" 
+                  :key="n.title" 
+                  :href="n.link" 
+                  target="_blank" 
+                  class="block border-b-2 border-slate-100 pb-6 group hover:border-slate-900 transition-colors"
+                >
+                  <div class="flex items-center gap-2 mb-2">
+                    <span class="text-[10px] font-black font-mono text-slate-400">{{ n.date }}</span>
+                    <Badge variant="outline" class="rounded-none border-slate-200 text-[9px] h-4 font-black">NEWS</Badge>
                   </div>
-                </n-card>
+                  <h3 class="text-sm font-black text-slate-800 leading-snug group-hover:text-slate-900 group-hover:underline">
+                    {{ n.title }}
+                  </h3>
+                  <p class="text-[10px] text-blue-600 mt-2 font-black uppercase tracking-tighter group-hover:translate-x-1 transition-transform inline-flex items-center gap-1">
+                    READ_FULL_STORY ➔
+                  </p>
+                </a>
+                <div v-if="newsList.length === 0" class="text-center py-32 space-y-4 border-4 border-dashed border-slate-100">
+                  <p class="text-xs font-black text-slate-300 uppercase">等待指令載入情報</p>
+                </div>
+              </div>
+            </ScrollArea>
+          </aside>
 
-                <!-- KPI (手機端 2x2) -->
-                <div class="kpi-grid">
-                  <div v-for="kpi in [
-                    { label: '收盤價', value: latestPrice?.close || '---', color: '#1e293b' },
-                    { label: '漲跌', value: latestPrice ? (latestPrice.spread > 0 ? '+' : '') + latestPrice.spread : '---', color: latestPrice?.spread > 0 ? '#ef4444' : '#10b981' },
-                    { label: '成交量(M)', value: latestPrice?.Trading_Volume ? (latestPrice.Trading_Volume / 1000000).toFixed(2) : '---', color: '#64748b' },
-                    { label: '狀態', value: isWorking ? '運算中' : '就緒', color: isWorking ? '#f59e0b' : '#10b981' }
-                  ]" :key="kpi.label" class="kpi-box">
-                    <span class="kpi-label">{{ kpi.label }}</span>
-                    <span class="kpi-value" :style="{ color: kpi.color }">{{ kpi.value }}</span>
+          <!-- 中間欄：圖表與核心數據 -->
+          <main class="lg:col-span-6 space-y-6">
+            <Card class="border-4 border-slate-900 bg-white rounded-none shadow-none">
+              <CardHeader class="border-b-4 border-slate-900 py-4 px-8 flex flex-row items-center justify-between">
+                <CardTitle class="text-xs font-black uppercase tracking-[0.2em]">價格走勢與大盤比較對照表</CardTitle>
+                <div class="flex gap-1">
+                  <div v-for="i in 3" :key="i" class="w-1.5 h-6 bg-slate-900"></div>
+                </div>
+              </CardHeader>
+              <CardContent class="p-8">
+                <div class="h-[450px]">
+                  <Line v-if="chartData.labels.length > 0" :data="chartData" :options="chartOptions" />
+                  <div v-else class="h-full flex flex-col items-center justify-center border-4 border-dashed border-slate-50">
+                    <p class="font-black uppercase tracking-[0.5em] text-xs text-slate-200">Waiting_For_Target_Input</p>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
 
-                <!-- 雙面板 (手機端堆疊) -->
-                <div class="sub-panels">
-                  <n-card title="市場情報" class="side-panel">
-                    <n-scrollbar style="max-height: 250px">
-                      <div class="news-list">
-                        <div v-for="n in newsList" :key="n.title" class="news-item">
-                          <span class="news-date">{{ n.date }}</span>
-                          <p class="news-title">{{ n.title }}</p>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-0 border-t-4 border-l-4 border-slate-900 bg-white">
+              <div v-for="kpi in [
+                { label: '當前收盤價', value: latestPrice?.close || '0.00', color: 'text-slate-900' },
+                { label: '今日漲跌幅', value: latestPrice ? (latestPrice.spread > 0 ? '+' : '') + latestPrice.spread : '0.00', color: latestPrice?.spread > 0 ? 'text-white bg-rose-600' : 'text-white bg-emerald-600' },
+                { label: '成交金額 (M)', value: latestPrice?.Trading_Volume ? (latestPrice.Trading_Volume / 1000000).toFixed(2) : '0.00', color: 'text-slate-900' },
+                { label: '近五日均價', value: priceHistory.length > 0 ? (priceHistory.reduce((a, b) => a + b.close, 0) / priceHistory.length).toFixed(2) : '0.00', color: 'text-slate-900' }
+              ]" :key="kpi.label" class="border-b-4 border-r-4 border-slate-900 p-6">
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{{ kpi.label }}</p>
+                <p class="text-3xl font-black tracking-tighter font-mono" :class="kpi.color">{{ kpi.value }}</p>
+              </div>
+            </div>
+
+            <div class="border-4 border-slate-900 bg-white overflow-hidden">
+              <div class="bg-slate-100 border-b-4 border-slate-900 py-2 px-6">
+                <span class="text-[10px] font-black uppercase tracking-widest">近五日交易快取數據</span>
+              </div>
+              <table class="w-full text-xs font-mono border-collapse">
+                <tbody>
+                  <tr v-for="d in priceHistory.slice(0, 5)" :key="d.date" class="border-b-2 border-slate-100 hover:bg-slate-50">
+                    <td class="py-4 px-8 font-black text-slate-400">{{ d.date }}</td>
+                    <td class="py-4 px-8 text-right font-black text-slate-900">收盤: {{ d.close }}</td>
+                    <td class="py-4 px-8 text-right font-black" :class="d.spread > 0 ? 'text-rose-600' : 'text-emerald-600'">
+                      漲跌: {{ d.spread > 0 ? '▲' : '▼' }}{{ Math.abs(d.spread) }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </main>
+
+          <!-- 右側欄：AI 戰術分析中心 -->
+          <section class="lg:col-span-3">
+            <div class="border-4 border-slate-900 bg-white h-full flex flex-col shadow-[12px_12px_0px_rgba(15,23,42,1)]">
+              <div class="bg-slate-900 text-white py-5 px-8 flex items-center justify-between shrink-0">
+                <span class="text-sm font-black tracking-[0.2em] uppercase italic">AI 戰術分析中心</span>
+                <div class="flex gap-2">
+                  <div class="w-2 h-4 bg-white animate-pulse"></div>
+                </div>
+              </div>
+              
+              <div class="flex-grow overflow-hidden">
+                <ScrollArea class="h-[600px] lg:h-[700px]">
+                  <div class="p-8 space-y-10">
+                    <template v-for="(msg, i) in messages" :key="i">
+                      <div v-if="msg.role !== 'system'" class="animate-in slide-in-from-top-2 duration-300">
+                        <div :class="msg.role === 'user' ? 'border-r-8 pr-6 text-right border-slate-200' : 'border-l-8 border-slate-900 pl-6 text-left'">
+                          <p class="text-[9px] font-black text-slate-400 uppercase mb-2 tracking-widest">
+                            {{ msg.role === 'user' ? 'USER_PROMPT' : 'AI_STRATEGY' }}
+                          </p>
+                          <p class="text-sm font-black leading-relaxed text-slate-900 uppercase">
+                            {{ msg.content }}
+                          </p>
                         </div>
                       </div>
-                    </n-scrollbar>
-                  </n-card>
-                  <n-card title="交易紀錄" class="side-panel">
-                    <n-scrollbar style="max-height: 250px">
-                      <table class="history-table">
-                        <tr v-for="d in priceHistory.slice(0, 10)" :key="d.date">
-                          <td>{{ d.date.slice(5) }}</td>
-                          <td align="right">{{ d.close }}</td>
-                          <td align="right" :class="d.spread > 0 ? 'up' : 'down'">{{ d.spread > 0 ? '▲' : '▼' }}{{ Math.abs(d.spread) }}</td>
-                        </tr>
-                      </table>
-                    </n-scrollbar>
-                  </n-card>
-                </div>
-
-              </n-space>
-            </div>
-
-            <!-- Right Side (AI) -->
-            <div class="column-right">
-              <n-card title="AI 專家分析結果" class="ai-card" header-style="font-weight: bold; background: #f8fafc">
-                <n-scrollbar style="max-height: 500px">
-                  <div class="ai-chat-body">
-                    <template v-for="(msg, i) in messages" :key="i">
-                      <div v-if="msg.role === 'assistant'" class="ai-msg">
-                        {{ msg.content }}
-                      </div>
                     </template>
-                    <div v-if="isWorking && messages.length <= 1" class="ai-loading">核心運算分析中...</div>
-                    <div v-if="!latestPrice && !isWorking" class="ai-placeholder text-center text-gray-300 py-10">
-                      請在上方輸入代號並執行分析
+                    
+                    <div v-if="isWorking && messages.length <= 1" class="flex flex-col items-center justify-center py-32 text-slate-400">
+                      <div class="w-16 h-1 bg-slate-900 animate-pulse mb-4"></div>
+                      <p class="text-[9px] font-black uppercase tracking-[0.5em]">正在解析市場模型...</p>
+                    </div>
+
+                    <div v-if="!latestPrice && !isWorking" class="py-48 text-center border-4 border-dashed border-slate-50">
+                      <p class="text-slate-300 font-black uppercase tracking-[0.2em] text-[10px]">等待標的數據導入</p>
                     </div>
                   </div>
-                </n-scrollbar>
-              </n-card>
-            </div>
+                </ScrollArea>
+              </div>
 
-          </div>
+              <!-- 對話輸入區域 -->
+              <div class="border-t-4 border-slate-900 p-5 bg-slate-50 space-y-4 shrink-0">
+                <div class="flex gap-2">
+                  <input 
+                    v-model="userInput" 
+                    placeholder="請輸入分析指令..." 
+                    class="flex-grow bg-white border-4 border-slate-900 p-4 text-sm font-black focus:outline-none placeholder:text-slate-200 uppercase"
+                    @keyup.enter="sendMessage"
+                  />
+                  <button 
+                    @click="sendMessage"
+                    :disabled="isWorking || !isLoaded"
+                    class="bg-slate-900 text-white px-6 font-black text-sm uppercase hover:bg-slate-800 active:bg-slate-700 disabled:bg-slate-200"
+                  >
+                    SEND
+                  </button>
+                </div>
+                <div class="flex justify-between items-center text-[9px] font-black text-slate-400 tracking-tighter">
+                  <span>QWEN_CORE_V2.5</span>
+                  <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 bg-emerald-500"></span> SECURE_LINK</span>
+                </div>
+              </div>
+              
+              <div class="p-3 border-t-2 border-slate-900 bg-slate-100 text-[9px] font-black text-slate-500 tracking-widest text-center">
+                LOCAL_QUANT_TERMINAL_SESSION
+              </div>
+            </div>
+          </section>
+
         </div>
       </div>
     </div>
@@ -334,65 +503,24 @@ const themeOverrides = {
 </template>
 
 <style>
-body { margin: 0; font-family: 'PingFang TC', sans-serif; background-color: #f1f5f9; }
-.main-container { min-height: 100vh; padding: 12px; }
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@800&display=swap');
+  
+  body { 
+    background-color: #ffffff; 
+    font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  }
+  
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace !important;
+  }
 
-/* 初始化 */
-.init-overlay { position: fixed; inset: 0; background: #f1f5f9; display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
-.init-card { max-width: 450px; width: 100%; text-align: center; border-radius: 24px !important; }
-.init-title { font-size: 2rem; font-weight: 900; margin-bottom: 24px; }
-.progress-section { margin-bottom: 32px; }
-.progress-info { display: flex; justify-content: space-between; font-weight: 700; color: #94a3b8; font-size: 12px; margin-bottom: 8px; }
-.init-btn { height: 56px !important; font-size: 1.1rem !important; font-weight: 900 !important; }
+  .n-scrollbar-rail { --n-scrollbar-width: 4px; }
+  
+  .chart-container canvas { 
+    image-rendering: crisp-edges;
+  }
 
-/* 頂部欄 */
-.top-nav { background: white; padding: 12px 16px; border-radius: 16px; display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; border: 1px solid #e2e8f0; }
-@media (min-width: 640px) { .top-nav { flex-direction: row; justify-content: space-between; padding: 16px 24px; } }
-.nav-brand .logo { font-size: 1.2rem; color: #334155; margin: 0; letter-spacing: 1px; }
-.nav-controls { display: flex; gap: 8px; width: 100%; }
-@media (min-width: 640px) { .nav-controls { width: auto; } }
-.stock-input { flex-grow: 1; min-width: 100px; }
-
-/* 主內容區 */
-.content-wrapper { height: auto; }
-.grid-main { display: grid; grid-template-cols: 1fr; gap: 16px; }
-@media (min-width: 1024px) { .grid-main { grid-template-cols: 8fr 4fr; } }
-
-/* 走勢圖 */
-.chart-card { border-radius: 20px !important; box-shadow: 0 2px 8px rgba(0,0,0,0.02) !important; }
-.chart-container { height: 250px; }
-@media (min-width: 640px) { .chart-container { height: 320px; } }
-
-/* KPI 卡片 */
-.kpi-grid { display: grid; grid-template-cols: repeat(2, 1fr); gap: 12px; }
-@media (min-width: 768px) { .kpi-grid { grid-template-cols: repeat(4, 1fr); } }
-.kpi-box { background: white; padding: 12px; border-radius: 16px; border: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 4px; }
-.kpi-label { font-size: 11px; font-weight: 700; color: #94a3b8; }
-.kpi-value { font-size: 1.5rem; font-weight: 900; letter-spacing: -0.5px; }
-
-/* 下方雙面板 */
-.sub-panels { display: grid; grid-template-cols: 1fr; gap: 16px; }
-@media (min-width: 768px) { .sub-panels { grid-template-cols: 1fr 1fr; } }
-.side-panel { border-radius: 20px !important; height: 100%; }
-
-/* 新聞與表格 */
-.news-item { padding: 12px 0; border-bottom: 1px solid #f1f5f9; }
-.news-date { font-size: 10px; font-weight: 800; color: #cbd5e1; }
-.news-title { margin: 2px 0 0 0; font-size: 0.95rem; font-weight: 600; color: #334155; line-height: 1.5; }
-.history-table { width: 100%; font-size: 0.9rem; border-collapse: collapse; }
-.history-table td { padding: 10px 0; border-bottom: 1px solid #f1f5f9; font-weight: 600; color: #475569; }
-.up { color: #ef4444; }
-.down { color: #10b981; }
-
-/* AI 分析區 (淺色優化) */
-.column-right { height: 100%; }
-.ai-card { border-radius: 24px !important; height: 100%; border: 1px solid #e2e8f0 !important; box-shadow: 0 4px 20px rgba(0,0,0,0.03) !important; }
-.ai-chat-body { padding: 8px; }
-.ai-msg { background: white; border: 1px solid #f1f5f9; padding: 24px; border-radius: 20px; font-size: 1.1rem; line-height: 1.8; color: #1e293b; font-weight: 500; margin-bottom: 16px; box-shadow: 0 2px 10px rgba(0,0,0,0.01); }
-.ai-loading { text-align: center; color: #94a3b8; padding: 20px; font-style: italic; font-size: 0.9rem; }
-.ai-footer { display: flex; justify-content: space-between; align-items: center; font-size: 10px; font-weight: 800; color: #cbd5e1; padding: 4px 0; }
-
-.pulse-dot { width: 6px; height: 6px; background: #ef4444; border-radius: 50%; margin-right: 6px; display: inline-block; }
-
-.scrollbar-hide::-webkit-scrollbar { display: none; }
+  input:focus {
+    box-shadow: inset 0 0 0 4px #0f172a;
+  }
 </style>
