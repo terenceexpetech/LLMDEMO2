@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue';
 import { CreateMLCEngine, type MLCEngine } from "@mlc-ai/web-llm";
-import { 
-  NConfigProvider, 
-  NGlobalStyle, 
-  NScrollbar, 
+import {
+  NConfigProvider,
+  NGlobalStyle,
+  NScrollbar,
   zhTW,
   dateZhTW,
   NResult
@@ -40,7 +40,7 @@ ChartJS.register(
 )
 
 // 狀態變數
-const selectedModel = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC"; 
+const selectedModel = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC";
 
 let engineInstance: MLCEngine | null = null;
 const isLoaded = ref(false);
@@ -49,9 +49,9 @@ const isWorking = ref(false);
 const statusText = ref("系統待命");
 const progressValue = ref(0);
 const webGPUAvailable = ref(true);
-const userInput = ref(""); 
-const tacticalSummary = ref(""); 
-const chatMessages = ref<any[]>([]); 
+const userInput = ref("");
+const tacticalSummary = ref("");
+const chatMessages = ref<any[]>([]);
 const chatScrollRef = ref<any>(null);
 const summaryScrollRef = ref<any>(null);
 
@@ -84,9 +84,9 @@ const chartOptions = {
 };
 
 // 結合數據與新聞的精確提示詞 (提速優化版)
-const systemMessage = { 
-  role: "system", 
-  content: "你是一位精煉的台灣股市分析師。請結合「數據趨勢」與「最新新聞」進行綜合解讀。直接點出走勢關鍵、新聞對情緒的影響及對策。嚴禁 Markdown 與星號，僅輸出繁體中文純文字。" 
+const systemMessage = {
+  role: "system",
+  content: "你是一位精煉的台灣股市分析師。請結合「數據趨勢」與「最新新聞」進行綜合解讀。直接點出走勢關鍵、新聞對情緒的影響及對策。嚴禁 Markdown 與星號，僅輸出繁體中文純文字。"
 };
 
 const internalMessages = ref<any[]>([systemMessage]);
@@ -131,11 +131,11 @@ async function initializeModel() {
 async function fetchDataAndSummarize() {
   if (!stockId.value.trim() || isWorking.value || !engineInstance) return;
   isWorking.value = true;
-  tacticalSummary.value = ""; 
-  
+  tacticalSummary.value = "";
+
   try {
     statusText.value = `同步數據中...`;
-    
+
     const dateList = [];
     for (let i = 0; i < 10; i++) {
       const d = new Date();
@@ -157,7 +157,7 @@ async function fetchDataAndSummarize() {
     if (priceData.msg === "success" && priceData.data.length > 0) {
       priceHistory.value = priceData.data.slice(-15).reverse();
       latestPrice.value = priceHistory.value[0];
-      
+
       const plotPrice = priceData.data;
       const plotIndex = indexData.msg === "success" ? indexData.data : [];
 
@@ -173,7 +173,7 @@ async function fetchDataAndSummarize() {
     }
 
     try {
-      const newsPromises = dateList.slice(0, 7).map(date => 
+      const newsPromises = dateList.slice(0, 7).map(date =>
         fetch(`https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockNews&data_id=${stockId.value}&start_date=${date}`).then(res => res.json())
       );
       const newsResults = await Promise.all(newsPromises);
@@ -181,7 +181,7 @@ async function fetchDataAndSummarize() {
         .filter(res => res.msg === 'success' && res.data)
         .flatMap(res => res.data)
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      
+
       newsList.value = allNews.slice(0, 30).map((item: any) => ({
         date: item.date, title: item.title, link: item.link
       }));
@@ -190,17 +190,17 @@ async function fetchDataAndSummarize() {
     }
 
     const detailedPrice = priceHistory.value.slice(0, 5).map((d: any) => `${d.date}: ${d.close} (${d.spread})`).join('\n');
-    
+
     // 組合更明確的 Input 引導 AI 讀取新聞
     const userPrompt = `【關鍵新聞標題】\n${newsList.value.slice(0, 8).map(n => n.title).join('\n')}\n\n【近五日量價走勢】\n${detailedPrice}\n\n請結合上述新聞與數據對 ${stockId.value} 進行分析：`;
-    
+
     internalMessages.value = [systemMessage, { role: "user", content: userPrompt }];
     statusText.value = "AI 分析中";
     const chunks = await engineInstance.chat.completions.create({ messages: internalMessages.value as any, stream: true, temperature: 0.1 });
 
-    for await (const chunk of chunks) { 
+    for await (const chunk of chunks) {
       const content = chunk.choices[0]?.delta?.content || "";
-      tacticalSummary.value += cleanText(content); 
+      tacticalSummary.value += cleanText(content);
     }
     internalMessages.value.push({ role: "assistant", content: tacticalSummary.value });
     statusText.value = "系統就緒";
@@ -226,9 +226,9 @@ async function sendMessage() {
     chatMessages.value.push({ role: "assistant", content: "" });
 
     const chunks = await engineInstance.chat.completions.create({ messages: internalMessages.value as any, stream: true, temperature: 0.3 });
-    for await (const chunk of chunks) { 
+    for await (const chunk of chunks) {
       const delta = chunk.choices[0]?.delta?.content || "";
-      chatMessages.value[assistantMsgIndex].content += cleanText(delta); 
+      chatMessages.value[assistantMsgIndex].content += cleanText(delta);
     }
     internalMessages.value.push({ role: "assistant", content: chatMessages.value[assistantMsgIndex].content });
     statusText.value = "系統就緒";
@@ -246,11 +246,11 @@ const themeOverrides = { common: { primaryColor: '#0f172a', borderRadius: '0px' 
   <n-config-provider :locale="zhTW" :date-locale="dateZhTW" :theme-overrides="themeOverrides">
     <n-global-style />
     <div class="h-screen w-full bg-[#fcfcfc] text-slate-900 font-sans selection:bg-slate-900 selection:text-white overflow-hidden text-sm">
-      
+
       <div v-if="!isLoaded" class="fixed inset-0 bg-white flex items-center justify-center z-[100] px-4 text-slate-900">
         <div class="max-w-md w-full border-2 border-slate-900 bg-white p-8 space-y-8 text-slate-900">
           <div class="space-y-2 border-b-2 border-slate-900 pb-6 text-center text-slate-900">
-            <h1 class="text-3xl font-black tracking-tighter uppercase italic text-slate-900">Analytic_Core</h1>
+            <h1 class="text-3xl font-black tracking-tighter uppercase italic text-slate-900">台灣個股總結小幫手</h1>
             <p class="text-[9px] font-bold text-slate-500 tracking-[0.4em]">本地推理引擎 v1.5 / 繁體中文版</p>
           </div>
           <div class="space-y-6">
@@ -268,7 +268,7 @@ const themeOverrides = { common: { primaryColor: '#0f172a', borderRadius: '0px' 
       <div v-else class="h-full flex flex-col p-2 gap-2 animate-in fade-in duration-500">
         <header class="flex-none flex items-stretch border-2 border-slate-900 bg-white shadow-sm">
           <div class="flex items-center gap-3 px-4 py-1.5 bg-slate-900 text-white text-slate-900">
-            <div class="text-xl font-black italic tracking-tighter uppercase text-white">QA_TERMINAL</div>
+            <div class="text-xl font-black italic tracking-tighter uppercase text-white">台灣個股總結小幫手</div>
             <div class="h-5 w-0.5 bg-slate-700"></div>
             <div><p class="text-[8px] font-bold text-slate-400 uppercase tracking-widest text-white">{{ statusText }}</p></div>
           </div>
@@ -327,7 +327,7 @@ const themeOverrides = { common: { primaryColor: '#0f172a', borderRadius: '0px' 
           <section class="col-span-3 flex flex-col gap-2 min-h-0">
             <div class="flex-[2] border-2 border-slate-900 bg-white flex flex-col shadow-sm min-h-0 overflow-hidden">
               <div class="bg-slate-900 text-white py-1.5 px-4 flex justify-between items-center shrink-0">
-                <span class="text-[9px] font-black tracking-widest uppercase italic">AI_TACTICAL_SUMMARY</span>
+                <span class="text-[9px] font-black tracking-widest uppercase italic">AI小幫手總結</span>
                 <Badge v-if="isWorking && tacticalSummary === ''" class="bg-blue-600 text-[7px] animate-pulse border-none rounded-none text-white">ANALYZING</Badge>
               </div>
               <n-scrollbar ref="summaryScrollRef" class="flex-grow">
@@ -364,6 +364,18 @@ const themeOverrides = { common: { primaryColor: '#0f172a', borderRadius: '0px' 
             </div>
           </section>
         </div>
+
+        <!-- 底部風險聲明跑馬燈 -->
+        <footer class="flex-none border-2 border-slate-900 bg-slate-900 text-white h-7 flex items-center overflow-hidden shadow-inner">
+          <div class="flex-none px-4 bg-rose-600 h-full flex items-center z-10">
+            <span class="text-[10px] font-black italic tracking-tighter uppercase">提醒</span>
+          </div>
+          <div class="marquee-wrapper">
+            <div class="marquee-content font-bold text-[11px] tracking-widest uppercase">
+              本系統所有 AI 分析報告與投資建議僅供參考，不代表任何形式之投資邀約。投資者應獨立思考，審慎評估風險，並對投資損益自負盈虧。市場有風險，入市需謹慎。
+            </div>
+          </div>
+        </footer>
       </div>
     </div>
   </n-config-provider>
@@ -378,4 +390,21 @@ const themeOverrides = { common: { primaryColor: '#0f172a', borderRadius: '0px' 
   input:focus { box-shadow: inset 0 0 0 2px #0f172a; }
   .h-screen { height: 100vh; height: 100dvh; }
   * { color-scheme: light; }
+
+  /* 跑馬燈動畫 */
+  .marquee-wrapper {
+    width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    position: relative;
+  }
+  .marquee-content {
+    display: inline-block;
+    padding-left: 100%;
+    animation: marquee-scroll 40s linear infinite;
+  }
+  @keyframes marquee-scroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-100%); }
+  }
 </style>
