@@ -354,7 +354,7 @@ const themeOverrides = { common: { primaryColor: '#0f172a', borderRadius: '0px' 
               <div class="flex-none border-t-2 border-slate-900 p-4 bg-slate-50 space-y-2">
                 <div class="flex gap-2">
                   <input v-model="userInput" placeholder="請輸入對策指令..." class="flex-grow bg-white border-2 border-slate-900 p-3 text-sm font-black focus:outline-none placeholder:text-slate-200 uppercase text-slate-900" @keyup.enter="sendMessage" />
-                  <button @click="sendMessage" :disabled="isWorking || !isLoaded" class="bg-slate-900 text-white px-4 font-black text-[10px] uppercase hover:bg-slate-800 active:bg-slate-700 transition-colors disabled:bg-slate-200 border-none rounded-none text-white">CMD</button>
+                  <button @click="sendMessage" :disabled="isWorking || !isLoaded" class="bg-slate-900 text-white px-4 font-black text-[10px] uppercase hover:bg-slate-800 active:bg-slate-700 transition-colors disabled:bg-slate-200 border-none rounded-none text-white">送出</button>
                 </div>
                 <div class="flex justify-between items-center text-[7px] font-black text-slate-400 tracking-tighter uppercase">
                   <span>QWEN_LOCAL_CORE</span>
