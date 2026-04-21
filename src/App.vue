@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue';
 import { CreateMLCEngine, type MLCEngine } from "@mlc-ai/web-llm";
-import { 
-  NConfigProvider, 
-  NGlobalStyle, 
-  NScrollbar, 
+import {
+  NConfigProvider,
+  NGlobalStyle,
+  NScrollbar,
   zhTW,
   dateZhTW
 } from 'naive-ui';
@@ -40,7 +40,7 @@ ChartJS.register(
 )
 
 // 狀態變數
-const selectedModel = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC"; 
+const selectedModel = "Qwen2.5-0.5B-Instruct-q4f16_1-MLC";
 
 let engineInstance: MLCEngine | null = null;
 const isLoaded = ref(false);
@@ -49,9 +49,9 @@ const isWorking = ref(false);
 const statusText = ref("系統待命");
 const progressValue = ref(0);
 const webGPUAvailable = ref(true);
-const userInput = ref(""); 
-const tacticalSummary = ref(""); 
-const chatMessages = ref<any[]>([]); 
+const userInput = ref("");
+const tacticalSummary = ref("");
+const chatMessages = ref<any[]>([]);
 const chatScrollRef = ref<any>(null);
 const summaryScrollRef = ref<any>(null);
 
@@ -79,22 +79,29 @@ const chartOptions: ChartOptions<'line'> = {
   },
   plugins: {
     legend: { position: 'top', align: 'end', labels: { boxWidth: 8, color: '#0f172a', font: { size: 10, weight: 'bold' } } },
-    tooltip: { 
-      backgroundColor: '#ffffff', 
-      titleColor: '#0f172a', 
-      borderColor: '#0f172a', 
-      borderWidth: 1, 
-      padding: 6, 
+    tooltip: {
+      enabled: true,
+      backgroundColor: '#ffffff',
+      titleColor: '#0f172a',
+      titleFont: { size: 12, weight: 'bold', family: 'monospace' },
+      bodyColor: '#475569',
+      bodyFont: { size: 11, family: 'monospace' },
+      borderColor: '#0f172a',
+      borderWidth: 2,
+      padding: 10,
       cornerRadius: 0,
-      displayColors: true
+      displayColors: true,
+      boxWidth: 6,
+      boxHeight: 6,
+      caretSize: 0
     }
   }
 };
 
 // 強化繁體中文指令
-const systemMessage = { 
-  role: "system" as const, 
-  content: "你是一位資深的台灣股市專家。回覆請嚴格遵循：1. 僅限繁體中文（台灣用語）。 2. 絕對禁止輸出 **、# 等任何 Markdown 符號。 3. 禁止任何文字裝飾，僅輸出一般純文字。 4. 必須結合新聞情報與量價數據給出對策。" 
+const systemMessage = {
+  role: "system" as const,
+  content: "你是一位資深的台灣股市專家。回覆請嚴格遵循：1. 僅限繁體中文（台灣用語）。 2. 絕對禁止輸出 **、# 等任何 Markdown 符號。 3. 禁止任何文字裝飾，僅輸出一般純文字。 4. 必須結合新聞情報與量價數據給出對策。"
 };
 
 const internalMessages = ref<any[]>([systemMessage]);
@@ -140,11 +147,11 @@ async function initializeModel() {
 async function fetchDataAndSummarize() {
   if (!stockId.value.trim() || isWorking.value || !engineInstance) return;
   isWorking.value = true;
-  tacticalSummary.value = ""; 
-  
+  tacticalSummary.value = "";
+
   try {
     statusText.value = `同步數據中...`;
-    
+
     // 日期計算
     const dateList: string[] = [];
     for (let i = 0; i < 10; i++) {
@@ -167,7 +174,7 @@ async function fetchDataAndSummarize() {
     if (priceData.msg === "success" && priceData.data.length > 0) {
       priceHistory.value = priceData.data.slice(-15).reverse();
       latestPrice.value = priceHistory.value[0];
-      
+
       const plotPrice = priceData.data;
       const plotIndex = indexData.msg === "success" ? indexData.data : [];
 
@@ -183,7 +190,7 @@ async function fetchDataAndSummarize() {
     }
 
     try {
-      const newsPromises = dateList.slice(0, 7).map(date => 
+      const newsPromises = dateList.slice(0, 7).map(date =>
         fetch(`https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockNews&data_id=${stockId.value}&start_date=${date}`).then(res => res.json())
       );
       const newsResults = await Promise.all(newsPromises);
@@ -191,7 +198,7 @@ async function fetchDataAndSummarize() {
         .filter((res: any) => res.msg === 'success' && res.data)
         .flatMap((res: any) => res.data)
         .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      
+
       newsList.value = allNews.slice(0, 30).map((item: any) => ({
         date: item.date, title: item.title, link: item.link, source: item.source || '媒體'
       }));
@@ -201,14 +208,14 @@ async function fetchDataAndSummarize() {
 
     const detailedPrice = priceHistory.value.slice(0, 5).map((d: any) => `${d.date}: ${d.close} (${d.spread})`).join('\n');
     const userPrompt = `【最新情報】\n${newsList.value.slice(0, 8).map((n: any) => n.title).join('\n')}\n\n【數據】\n${detailedPrice}\n\n請對 ${stockId.value} 進行分析：`;
-    
+
     internalMessages.value = [systemMessage, { role: "user", content: userPrompt }];
     statusText.value = "AI 分析中";
     const chunks = await engineInstance.chat.completions.create({ messages: internalMessages.value as any, stream: true, temperature: 0.1 });
 
-    for await (const chunk of chunks) { 
+    for await (const chunk of chunks) {
       const content = chunk.choices[0]?.delta?.content || "";
-      tacticalSummary.value += cleanText(content); 
+      tacticalSummary.value += cleanText(content);
     }
     internalMessages.value.push({ role: "assistant", content: tacticalSummary.value });
     statusText.value = "系統就緒";
@@ -234,9 +241,9 @@ async function sendMessage() {
     chatMessages.value.push({ role: "assistant", content: "" });
 
     const chunks = await engineInstance.chat.completions.create({ messages: internalMessages.value as any, stream: true, temperature: 0.3 });
-    for await (const chunk of chunks) { 
+    for await (const chunk of chunks) {
       const delta = chunk.choices[0]?.delta?.content || "";
-      chatMessages.value[assistantMsgIndex].content += cleanText(delta); 
+      chatMessages.value[assistantMsgIndex].content += cleanText(delta);
     }
     internalMessages.value.push({ role: "assistant", content: chatMessages.value[assistantMsgIndex].content });
     statusText.value = "系統就緒";
@@ -254,12 +261,12 @@ const themeOverrides = { common: { primaryColor: '#0f172a', borderRadius: '0px' 
   <n-config-provider :locale="zhTW" :date-locale="dateZhTW" :theme-overrides="themeOverrides">
     <n-global-style />
     <div class="h-screen w-full bg-[#fcfcfc] text-slate-900 font-sans selection:bg-slate-900 selection:text-white overflow-hidden text-sm">
-      
+
       <!-- 初始化全螢幕遮罩 -->
       <div v-if="!isLoaded" class="fixed inset-0 bg-white flex items-center justify-center z-[100] px-4 text-slate-900">
         <div class="max-w-md w-full border-2 border-slate-900 bg-white p-8 space-y-8 text-slate-900">
           <div class="space-y-2 border-b-2 border-slate-900 pb-6 text-center text-slate-900">
-            <h1 class="text-3xl font-black tracking-tighter uppercase italic text-slate-900">個股分析戰情室</h1>
+            <h1 class="text-3xl font-black tracking-tighter uppercase italic text-slate-900">台灣個股總結小幫手</h1>
             <p class="text-[9px] font-bold text-slate-500 tracking-[0.4em]">本地推理引擎 v1.5 / 繁體中文版</p>
           </div>
           <div class="space-y-6 text-slate-900">
@@ -276,11 +283,11 @@ const themeOverrides = { common: { primaryColor: '#0f172a', borderRadius: '0px' 
 
       <!-- 主佈局 -->
       <div v-else class="h-full flex flex-col p-2 gap-2 animate-in fade-in duration-500">
-        
+
         <!-- 頂部控制面板 -->
         <header class="flex-none flex items-stretch border-2 border-slate-900 bg-white shadow-sm">
           <div class="flex items-center gap-3 px-4 py-1.5 bg-slate-900 text-white">
-            <div class="text-xl font-black italic tracking-tighter uppercase text-white">QUANT_TERMINAL</div>
+            <div class="text-xl font-black italic tracking-tighter uppercase text-white">台灣個股總結小幫手</div>
             <div class="h-5 w-0.5 bg-slate-700"></div>
             <div><p class="text-[8px] font-bold text-slate-400 uppercase tracking-widest text-white">{{ statusText }}</p></div>
           </div>
@@ -294,7 +301,7 @@ const themeOverrides = { common: { primaryColor: '#0f172a', borderRadius: '0px' 
 
         <!-- 三欄式網格佈局 -->
         <div class="flex-grow grid grid-cols-12 gap-2 min-h-0 text-slate-900">
-          
+
           <!-- 左側：情報流 -->
           <aside class="col-span-3 border-2 border-slate-900 bg-white flex flex-col shadow-sm min-h-0 text-slate-900">
             <div class="bg-slate-900 text-white py-1 px-4 flex justify-between items-center shrink-0"><span class="text-[9px] font-black uppercase tracking-widest text-white">媒體監控情報流</span><div class="w-1.5 h-1.5 bg-emerald-500 animate-pulse"></div></div>
@@ -346,10 +353,10 @@ const themeOverrides = { common: { primaryColor: '#0f172a', borderRadius: '0px' 
 
           <!-- 右側：AI 分析報告與指令 -->
           <section class="col-span-3 flex flex-col gap-2 min-h-0 text-slate-900">
-            
+
             <div class="flex-[2] border-2 border-slate-900 bg-white flex flex-col shadow-sm min-h-0 overflow-hidden text-slate-900">
               <div class="bg-slate-900 text-white py-1.5 px-4 flex justify-between items-center shrink-0">
-                <span class="text-[9px] font-black tracking-widest uppercase italic text-white">AI_TACTICAL_SUMMARY</span>
+                <span class="text-[9px] font-black tracking-widest uppercase italic text-white">小幫手總結</span>
                 <Badge v-if="isWorking && tacticalSummary === ''" class="bg-blue-600 text-[7px] animate-pulse border-none rounded-none text-white px-1">ANALYZING</Badge>
               </div>
               <n-scrollbar ref="summaryScrollRef" class="flex-grow">
@@ -374,14 +381,14 @@ const themeOverrides = { common: { primaryColor: '#0f172a', borderRadius: '0px' 
                   <div v-if="chatMessages.length === 0" class="text-center py-20 text-slate-100 italic font-black uppercase text-[10px] tracking-widest">Ready_For_Query</div>
                 </div>
               </n-scrollbar>
-              
+
               <div class="flex-none border-t-2 border-slate-900 p-4 bg-slate-50 space-y-2 text-slate-900">
                 <div class="flex gap-2">
                   <input v-model="userInput" placeholder="輸入指令..." class="flex-grow bg-white border-2 border-slate-900 p-3 text-sm font-black focus:outline-none placeholder:text-slate-200 uppercase text-slate-900" @keyup.enter="sendMessage" />
                   <button @click="sendMessage" :disabled="isWorking || !isLoaded" class="bg-slate-900 text-white px-4 font-black text-[10px] uppercase hover:bg-slate-800 active:bg-slate-700 transition-colors disabled:bg-slate-200 border-none rounded-none text-white">CMD</button>
                 </div>
                 <div class="flex justify-between items-center text-[7px] font-black text-slate-400 tracking-tighter uppercase text-slate-400">
-                  <span>QWEN_LOCAL_QUANT</span>
+                  <span>台灣個股總結小幫手</span>
                   <span class="flex items-center gap-1"><span class="w-1 h-1 bg-emerald-500 rounded-full animate-pulse"></span> SECURE_LINK</span>
                 </div>
               </div>
@@ -391,7 +398,7 @@ const themeOverrides = { common: { primaryColor: '#0f172a', borderRadius: '0px' 
         </div>
 
         <footer class="flex-none border-2 border-slate-900 bg-slate-900 text-white h-7 flex items-center overflow-hidden shadow-inner">
-          <div class="flex-none px-4 bg-rose-600 h-full flex items-center z-10"><span class="text-[10px] font-black italic tracking-tighter uppercase text-white">WARNING</span></div>
+          <div class="flex-none px-4 bg-rose-600 h-full flex items-center z-10"><span class="text-[10px] font-black italic tracking-tighter uppercase text-white">重要提醒</span></div>
           <div class="marquee-wrapper text-white"><div class="marquee-content font-bold text-[11px] tracking-widest uppercase text-white">投資建議僅供參考，不代表任何形式之投資邀約。投資者應獨立思考，審慎評估風險。市場有風險，入市需謹慎。</div></div>
         </footer>
       </div>
